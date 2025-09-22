@@ -149,3 +149,4 @@ To unregister it, do:
 
 	$ regsvr32 /u pgbevent.dll
 # talker-app
+# TalkerApp
