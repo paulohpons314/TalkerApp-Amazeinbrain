@@ -151,3 +151,4 @@ To unregister it, do:
 # talker-app
 # TalkerApp
 # TalkerApp-Replit
+# MindSketch
