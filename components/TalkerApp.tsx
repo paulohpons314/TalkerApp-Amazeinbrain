@@ -3,12 +3,7 @@
 import React, { useState } from 'react';
 import AudioRecorder from '@/components/AudioRecorder';
 import ResultDisplay from '@/components/ResultDisplay';
-
-interface ProcessedResult {
-  processedText: string;
-  analysis: string;
-  explanation: string;
-}
+import type { ProcessedResult, OceanScores, PsychologicalElement } from '@/lib/types';
 
 export default function TalkerApp() {
   const [transcript, setTranscript] = useState('');
@@ -43,36 +38,12 @@ export default function TalkerApp() {
     setError(null);
 
     try {
-      const enhancedPrompt = `
-      Sistema: Você é um assistente especializado em processamento de texto transcrito de voz.
-
-      FUNÇÃO DUPLA - Tag-Talker:
-      - Se encontrar "Tag-Talker" ou "tag-talker" seguido de instruções, trate como comandos específicos do usuário
-      - Execute as instruções Tag-Talker no texto (ex: negrito, bullet points, exclusões, análises, etc.)
-      - O restante do texto deve ser processado normalmente
-
-      Texto transcrito: ${text}
-
-      Forneça sua resposta no formato:
-      <processed_text>
-      [Texto processado e formatado]
-      </processed_text>
-      
-      <analysis>
-      [Análise do conteúdo se solicitada]
-      </analysis>
-      
-      <explanation>
-      [Explicação das transformações realizadas]
-      </explanation>
-      `;
-
       const response = await fetch('/api/process', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ prompt: enhancedPrompt })
+        body: JSON.stringify({ prompt: text })
       });
 
       const result = await response.json();
@@ -80,6 +51,9 @@ export default function TalkerApp() {
       if (result.success && result.result) {
         const parsed = parseClaudeResponse(result.result);
         setProcessedResult(parsed);
+        
+        // Salvar no banco de dados
+        await saveToHistory(text, parsed);
       } else {
         setError(result.error || 'Erro ao processar o texto');
       }
@@ -89,6 +63,130 @@ export default function TalkerApp() {
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  const saveToHistory = async (transcription: string, result: ProcessedResult) => {
+    try {
+      // Extrair OCEAN scores da análise (se presente)
+      const oceanScores = extractOceanScores(result.analysis);
+      
+      // Extrair temas da análise
+      const themes = extractThemes(result.analysis);
+      
+      // Extrair elementos psicológicos
+      const psychologicalElements = extractPsychologicalElements(result.analysis);
+
+      await fetch('/api/history', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          transcription,
+          processed_text: result.processedText,
+          analysis: result.analysis,
+          ocean_scores: oceanScores,
+          themes,
+          psychological_elements: psychologicalElements
+        })
+      });
+    } catch (err) {
+      console.error('Erro ao salvar no histórico:', err);
+      // Não bloqueia o fluxo principal se falhar
+    }
+  };
+
+  const extractOceanScores = (analysis: string): OceanScores | undefined => {
+    if (!analysis) return undefined;
+    
+    const oceanRegex = /([OCEAN]):\s*(\d+)\/10/gi;
+    const matches = [...analysis.matchAll(oceanRegex)];
+    
+    if (matches.length === 0) return undefined;
+    
+    const scores: OceanScores = {};
+    const traitMap: Record<string, keyof OceanScores> = {
+      'O': 'openness',
+      'C': 'conscientiousness',
+      'E': 'extraversion',
+      'A': 'agreeableness',
+      'N': 'neuroticism'
+    };
+    
+    matches.forEach(match => {
+      const trait = traitMap[match[1].toUpperCase()];
+      if (trait) {
+        scores[trait] = parseInt(match[2]);
+      }
+    });
+    
+    return Object.keys(scores).length > 0 ? scores : undefined;
+  };
+
+  const extractThemes = (analysis: string): string[] => {
+    if (!analysis) return [];
+    
+    // Buscar palavras-chave comuns em português
+    const keywords = [
+      'trabalho', 'carreira', 'família', 'relacionamento', 'amor',
+      'ansiedade', 'medo', 'felicidade', 'tristeza', 'raiva',
+      'saúde', 'dinheiro', 'futuro', 'passado', 'mudança'
+    ];
+    
+    const foundThemes: string[] = [];
+    const lowerAnalysis = analysis.toLowerCase();
+    
+    keywords.forEach(keyword => {
+      if (lowerAnalysis.includes(keyword)) {
+        foundThemes.push(keyword);
+      }
+    });
+    
+    return foundThemes;
+  };
+
+  const extractPsychologicalElements = (analysis: string): PsychologicalElement[] => {
+    if (!analysis) return [];
+    
+    const elements: PsychologicalElement[] = [];
+    
+    // Vieses cognitivos
+    const biases = [
+      'confirmation_bias', 'negativity_bias', 'availability_heuristic',
+      'fundamental_attribution_error', 'self_serving_bias'
+    ];
+    
+    // Mecanismos de defesa
+    const defenses = [
+      'rationalization', 'projection', 'intellectualization',
+      'displacement', 'minimization'
+    ];
+    
+    const lowerAnalysis = analysis.toLowerCase();
+    
+    biases.forEach(bias => {
+      const friendlyName = bias.replace(/_/g, ' ');
+      if (lowerAnalysis.includes(friendlyName) || lowerAnalysis.includes(bias)) {
+        elements.push({
+          element_type: 'cognitive_bias',
+          element_name: bias,
+          confidence: 0.7
+        });
+      }
+    });
+    
+    defenses.forEach(defense => {
+      const friendlyName = defense.replace(/_/g, ' ');
+      if (lowerAnalysis.includes(friendlyName) || lowerAnalysis.includes(defense)) {
+        elements.push({
+          element_type: 'defense_mechanism',
+          element_name: defense,
+          confidence: 0.7
+        });
+      }
+    });
+    
+    return elements;
   };
 
   const parseClaudeResponse = (response: string): ProcessedResult => {
@@ -115,12 +213,25 @@ export default function TalkerApp() {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
       <div className="container mx-auto px-4 py-8">
         <header className="text-center mb-12">
-          <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">
-            TalkerApp
-          </h1>
-          <p className="text-gray-600 dark:text-gray-400">
-            Voice Recording and AI Processing
-          </p>
+          <div className="flex justify-between items-center">
+            <div className="flex-1"></div>
+            <div className="flex-1 text-center">
+              <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">
+                TalkerApp
+              </h1>
+              <p className="text-gray-600 dark:text-gray-400">
+                Voice Recording and AI Processing
+              </p>
+            </div>
+            <div className="flex-1 flex justify-end">
+              <a
+                href="/history"
+                className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg shadow-lg transition-all hover:scale-105"
+              >
+                📚 Histórico
+              </a>
+            </div>
+          </div>
         </header>
 
         <main className="max-w-6xl mx-auto">

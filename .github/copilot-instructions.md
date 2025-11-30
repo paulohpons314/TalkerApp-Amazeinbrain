@@ -132,7 +132,7 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 ```
 
 ## User Experience Focus
-"Texto como Protagonista" - Text content is the primary focus, controls are secondary. Prioritize reading experience over technical complexity.
+According to the README.md, TakerApp is a "Web application for voice recording and AI processing". However, this description serves as a conceptual use case during development, and is merely for the record. The true and sole objective of this project is to create the first "thought processor," a tool only made possible by the advent of powerful LLM AIs with advanced capabilities for extracting and analyzing subliminal elements from unstructured texts. These texts include audio recordings for transcribing diaries, documenting reflections, insights—in essence, any free flow of ideas recorded by the user and submitted to the "thought processor" in search of guidance for decision-making and, more broadly, a path to greater self-knowledge. Therefore, the purpose of TalkerApp is to help users better understand themselves and their emotional triggers, biases, and unconscious emotions that influence their thinking and reasoning. This is achieved through the most advanced technological combination of access to cutting-edge computational processing and the natural language interaction capabilities of Artificial Intelligence.
 
 ### UI Hierarchy
 1. Processed text display (largest, most prominent)
