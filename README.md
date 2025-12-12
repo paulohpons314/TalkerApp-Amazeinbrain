@@ -2,9 +2,9 @@
 
 **Voice recording and AI-powered psychological analysis tool**
 
-> 📅 **Last Updated:** 2025-12-01
+> 📅 **Last Updated:** 2025-12-08
 > 🖥️ **Platform:** VS Code + Claude Code CLI
-> 🏗️ **Status:** Development - Core functional, UI redesign pending
+> 🏗️ **Status:** Development - Core functional + Database hardening complete
 
 ---
 
@@ -70,38 +70,92 @@ npm run dev
 
 ```
 TalkerApp-Amazeinbrain/
-├── app/
-│   ├── api/                  # Rotas Next.js API
-│   │   ├── transcribe/       # Whisper transcription
-│   │   ├── process/          # Claude processing
-│   │   ├── history/          # CRUD sessions
-│   │   └── insights/         # Analytics queries
-│   ├── history/              # Página de histórico
-│   ├── page.tsx              # Homepage
-│   └── layout.tsx            # Layout global + PWA
+├── app/                      # Next.js App Router
+│   ├── api/                  # Rotas de API (server-side)
+│   │   ├── transcribe/       # POST - Whisper transcription
+│   │   │   └── route.ts      # Endpoint de transcrição de áudio
+│   │   ├── process/          # POST - Claude AI processing
+│   │   │   └── route.ts      # Endpoint de processamento com Claude
+│   │   ├── history/          # GET/POST/PATCH/DELETE - CRUD de sessões
+│   │   │   └── route.ts      # Gerenciamento completo do histórico
+│   │   └── insights/         # GET - Queries analíticas agregadas
+│   │       └── route.ts      # Estatísticas e métricas temporais
+│   │
+│   ├── history/              # Página de histórico de sessões
+│   │   └── page.tsx          # Interface de visualização e busca
+│   ├── page.tsx              # Homepage - gravador principal
+│   ├── layout.tsx            # Layout raiz + metadados PWA
+│   ├── globals.css           # Estilos globais + Tailwind
+│   └── favicon.ico           # Ícone da aplicação
 │
-├── components/
-│   ├── TalkerApp.tsx         # Main orchestrator
-│   ├── AudioRecorder.tsx     # Recording + upload
-│   ├── ResultDisplay.tsx     # Results tabs
-│   └── InsightsPanel.tsx     # Temporal analysis (graphs)
+├── components/               # Componentes React reutilizáveis
+│   ├── TalkerApp.tsx         # Orquestrador principal do fluxo
+│   ├── AudioRecorder.tsx     # Gravação/upload de áudio
+│   ├── ResultDisplay.tsx     # Exibição de resultados (tabs)
+│   └── InsightsPanel.tsx     # Painel de análise temporal (gráficos)
 │
-├── lib/
-│   ├── database.ts           # SQLite schema + CRUD
-│   ├── analytics.ts          # Complex queries
-│   ├── types.ts              # TypeScript definitions
-│   └── prompts/              # Modular prompt system
-│       ├── builder.ts        # Prompt composer
-│       ├── templates/        # Base prompt templates
-│       └── variants/         # Tone/depth variants
+├── lib/                      # Lógica de negócio e utilidades
+│   ├── database.ts           # 🔧 Schema SQLite + CRUD + Manutenção
+│   │                         #    - WAL checkpoint automático (5min)
+│   │                         #    - Graceful shutdown com consolidação
+│   │                         #    - Tabelas: sessions, ocean_scores, themes,
+│   │                         #      psychological_elements, session_themes
+│   │                         #    - Full-Text Search (FTS5)
+│   │
+│   ├── analytics.ts          # Queries complexas para insights
+│   │                         #    - Evolução temporal de scores OCEAN
+│   │                         #    - Temas mais frequentes
+│   │                         #    - Padrões psicológicos dominantes
+│   │
+│   ├── types.ts              # Definições TypeScript compartilhadas
+│   │
+│   └── prompts/              # Sistema modular de prompts
+│       ├── builder.ts        # Compositor dinâmico de prompts
+│       ├── templates/        # Templates base de prompts
+│       └── variants/         # Variações de tom e profundidade
 │
-├── data/
-│   └── talkerapp.db          # SQLite database (auto-created)
+├── data/                     # Dados persistentes (SQLite)
+│   ├── talkerapp.db          # Banco principal (auto-criado)
+│   ├── talkerapp.db-wal      # Write-Ahead Log (auto-gerenciado)
+│   └── talkerapp.db-shm      # Shared Memory (auto-gerenciado)
 │
-└── docs/
-    ├── archive/              # Documentação de sessões antigas
-    └── experiments/          # Componentes de teste
+├── docs/                     # Documentação do projeto
+│   ├── BUG-HISTORICO-VAZIO-SOLUCAO.md  # Postmortem do bug de WAL
+│   ├── archive/              # Histórico de desenvolvimento
+│   └── experiments/          # Testes e componentes experimentais
+│
+├── public/                   # Assets estáticos
+│   ├── icon-192.png          # PWA icon (192x192)
+│   ├── icon-512.png          # PWA icon (512x512)
+│   └── manifest.json         # Manifesto PWA
+│
+├── .env.local                # Variáveis de ambiente (não versionado)
+├── .env.local.example        # Template de configuração
+├── .gitignore                # Arquivos ignorados pelo Git
+├── next.config.mjs           # Configuração do Next.js
+├── tailwind.config.ts        # Configuração do Tailwind CSS
+├── tsconfig.json             # Configuração do TypeScript
+├── package.json              # Dependências e scripts
+└── README.md                 # Este arquivo
 ```
+
+### 📁 Detalhes Importantes
+
+**Database (`lib/database.ts`):**
+- **WAL Mode:** Modo Write-Ahead Logging ativado para melhor performance
+- **Checkpoint Automático:** Executa a cada 5 minutos para consolidar WAL
+- **Graceful Shutdown:** Consolida dados antes de encerrar processo
+- **FTS5:** Full-Text Search para busca semântica nas transcrições
+
+**API Routes:**
+- Todas as rotas são server-side only (protegem API keys)
+- Validação de entrada e tratamento de erros robusto
+- Logs detalhados para debugging
+
+**PWA:**
+- Instalável em desktop e mobile
+- Funciona offline (após primeira visita)
+- Cache de assets estáticos
 
 ---
 
@@ -187,9 +241,33 @@ TalkerApp-Amazeinbrain/
 - Permitir acesso ao microfone no navegador
 - HTTPS obrigatório (exceto `localhost`)
 
+**Histórico de sessões aparece vazio** ✨
+- **Causa:** WAL do SQLite não consolidado (dados "presos")
+- **Solução imediata:** Reiniciar o servidor com `Ctrl+C` (graceful shutdown)
+- **Prevenção:** Sempre usar `Ctrl+C` para parar o servidor (nunca fechar terminal abruptamente)
+- **Verificação:** Executar `node diagnose-wal.js` para checar integridade
+- **Documentação completa:** Ver `docs/BUG-HISTORICO-VAZIO-SOLUCAO.md`
+
 **Insights mostrando dados estranhos**
 - Conhecido: alucinações estatísticas (ex: "200% ansiedade")
 - Correção planejada para Fase 3 (integração Self-Solar System)
+
+### 🔧 Boas Práticas para Desenvolvimento
+
+**Ao encerrar o servidor:**
+1. Sempre use `Ctrl+C` no terminal (nunca feche a janela)
+2. Aguarde as mensagens de log mostrando o shutdown:
+   ```
+   [DB] Recebido SIGINT, encerrando gracefully...
+   [DB] Executando checkpoint final antes de fechar...
+   [DB] Banco de dados fechado com sucesso
+   ```
+3. Isso garante que dados no WAL sejam consolidados
+
+**Monitoramento de saúde:**
+- Checkpoint automático executa a cada 5 minutos
+- Procure por: `[DB] WAL checkpoint executado com sucesso` nos logs
+- Se o WAL ficar > 100 KB, execute `node diagnose-wal.js`
 
 ---
 

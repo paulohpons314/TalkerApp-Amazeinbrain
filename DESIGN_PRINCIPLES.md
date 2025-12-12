@@ -579,4 +579,6 @@ Antes de apresentar qualquer insight, verificar:
 
 **"Especialista fala como especialista - e se for empático, maior será sua autoridade e o reconhecimento recebido."**
 
-*- Paulo, 29/11/2025*
+**"Pensamos que sabemos quem somos, mas equer sabemos *como* pensamos."**
+
+**- Paulo, 29/11/2025**

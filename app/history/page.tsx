@@ -16,6 +16,7 @@ interface Session {
 export default function HistoryPage() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSession, setSelectedSession] = useState<Session | null>(null);
   const [showInsights, setShowInsights] = useState(false);
@@ -26,14 +27,26 @@ export default function HistoryPage() {
 
   const loadSessions = async () => {
     try {
+      setError(null);
       const response = await fetch('/api/history?limit=50');
+
+      if (!response.ok) {
+        throw new Error(`Erro HTTP: ${response.status}`);
+      }
+
       const result = await response.json();
-      
+
       if (result.success) {
         setSessions(result.data);
+        console.log(`[History] ${result.data.length} sessões carregadas com sucesso`);
+      } else {
+        throw new Error(result.error || 'Erro desconhecido ao carregar sessões');
       }
     } catch (error) {
-      console.error('Erro ao carregar histórico:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+      console.error('❌ Erro ao carregar histórico:', errorMessage);
+      setError(`Falha ao carregar histórico: ${errorMessage}`);
+      setSessions([]);
     } finally {
       setLoading(false);
     }
@@ -47,14 +60,26 @@ export default function HistoryPage() {
 
     try {
       setLoading(true);
+      setError(null);
       const response = await fetch(`/api/history?search=${encodeURIComponent(searchQuery)}`);
+
+      if (!response.ok) {
+        throw new Error(`Erro HTTP: ${response.status}`);
+      }
+
       const result = await response.json();
-      
+
       if (result.success) {
         setSessions(result.data);
+        console.log(`[History] Busca encontrou ${result.data.length} resultado(s)`);
+      } else {
+        throw new Error(result.error || 'Erro ao buscar');
       }
     } catch (error) {
-      console.error('Erro ao buscar:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+      console.error('❌ Erro ao buscar:', errorMessage);
+      setError(`Falha na busca: ${errorMessage}`);
+      setSessions([]);
     } finally {
       setLoading(false);
     }
@@ -156,6 +181,32 @@ export default function HistoryPage() {
         {showInsights && (
           <div className="mb-8">
             <InsightsPanel />
+          </div>
+        )}
+
+        {/* Error Banner */}
+        {error && (
+          <div className="mb-8 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 rounded-lg p-6">
+            <div className="flex items-start">
+              <span className="text-2xl mr-3">⚠️</span>
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold text-red-800 dark:text-red-300 mb-2">
+                  Erro ao carregar histórico
+                </h3>
+                <p className="text-red-700 dark:text-red-400 mb-3">
+                  {error}
+                </p>
+                <button
+                  onClick={() => {
+                    setError(null);
+                    loadSessions();
+                  }}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition-all"
+                >
+                  🔄 Tentar novamente
+                </button>
+              </div>
+            </div>
           </div>
         )}
 

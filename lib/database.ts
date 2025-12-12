@@ -18,8 +18,30 @@ export function getDatabase(): Database.Database {
     db.pragma('journal_mode = WAL'); // Write-Ahead Logging para melhor performance
     db.pragma('foreign_keys = ON'); // Habilitar foreign keys
     initializeSchema(db);
+    setupDatabaseMaintenance(db);
   }
   return db;
+}
+
+// Configurar manutenção automática do banco de dados
+function setupDatabaseMaintenance(database: Database.Database) {
+  // Checkpoint automático a cada 5 minutos para consolidar WAL
+  const CHECKPOINT_INTERVAL = 5 * 60 * 1000; // 5 minutos
+
+  const checkpointTimer = setInterval(() => {
+    try {
+      // PASSIVE: não bloqueia leituras/escritas, apenas consolida quando possível
+      database.pragma('wal_checkpoint(PASSIVE)');
+      console.log('[DB] WAL checkpoint executado com sucesso');
+    } catch (error) {
+      console.error('[DB] Erro ao executar checkpoint:', error);
+    }
+  }, CHECKPOINT_INTERVAL);
+
+  // Garantir que o timer seja limpo ao encerrar
+  process.on('beforeExit', () => {
+    clearInterval(checkpointTimer);
+  });
 }
 
 function initializeSchema(database: Database.Database) {
@@ -325,9 +347,38 @@ export function getSessionCount(): number {
   return result.count;
 }
 
-// Fechar conexão ao encerrar processo
-process.on('exit', () => {
+// Graceful shutdown: garantir que dados sejam salvos antes de encerrar
+function closeDatabase() {
   if (db) {
-    db.close();
+    try {
+      // Executar checkpoint final para consolidar todo o WAL
+      console.log('[DB] Executando checkpoint final antes de fechar...');
+      db.pragma('wal_checkpoint(TRUNCATE)');
+
+      // Fechar conexão
+      db.close();
+      db = null;
+      console.log('[DB] Banco de dados fechado com sucesso');
+    } catch (error) {
+      console.error('[DB] Erro ao fechar banco de dados:', error);
+    }
   }
+}
+
+// Capturar múltiplos sinais de encerramento
+process.on('exit', closeDatabase);
+process.on('SIGINT', () => {
+  console.log('\n[DB] Recebido SIGINT, encerrando gracefully...');
+  closeDatabase();
+  process.exit(0);
+});
+process.on('SIGTERM', () => {
+  console.log('\n[DB] Recebido SIGTERM, encerrando gracefully...');
+  closeDatabase();
+  process.exit(0);
+});
+process.on('uncaughtException', (error) => {
+  console.error('[DB] Exceção não capturada:', error);
+  closeDatabase();
+  process.exit(1);
 });
